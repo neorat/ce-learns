@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Cheat Engine 第6关：指针(Pointer) 动画教学模拟器</title>
+    <style>
+        :root {
+            --bg-color: #1e1e24;
+            --panel-bg: #2a2a35;
+            --text-color: #e0e0e6;
+            --green-base: #2ecc71;
+            --blue-dynamic: #3498db;
+            --accent-red: #e74c3c;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        /* 步骤控制条 */
+        .step-control {
+            background-color: var(--panel-bg);
+            padding: 15px;
+            border-radius: 8px;
+            width: 900px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .step-desc {
+            font-size: 16px;
+            max-width: 70%;
+            line-height: 1.5;
+        }
+
+        .step-desc strong {
+            color: #f1c40f;
+        }
+
+        .btn {
+            background-color: #4a4a5a;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #5a5a70;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background-color: #222;
+            color: #555;
+            cursor: not-allowed;
+        }
+
+        .btn-primary { background-color: #8e44ad; }
+        .btn-primary:hover { background-color: #9b59b6; }
+
+        /* 主模拟器布局 */
+        .simulator {
+            display: flex;
+            gap: 20px;
+            width: 930px;
+            position: relative;
+        }
+
+        /* 游戏窗口和CE窗口通用样式 */
+        .window {
+            background-color: var(--panel-bg);
+            border: 2px solid #444;
+            border-radius: 6px;
+            flex: 1;
+            height: 420px;
+            padding: 15px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .window-title {
+            font-weight: bold;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #444;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        /* 虚拟游戏内部样式 */
+        .game-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 20px;
+        }
+
+        .hp-bar-container {
+            width: 80%;
+            background-color: #444;
+            height: 24px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #555;
+            position: relative;
+        }
+
+        .hp-bar {
+            width: 100%;
+            background: linear-gradient(90deg, #d35400, #e67e22);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .hp-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 2px;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        /* 虚拟CE内部样式 */
+        .ce-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            justify-content: space-between;
+        }
+
+        /* 内存网格和可视化区 */
+        .memory-visual-zone {
+            position: relative;
+            background-color: #15151a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            height: 240px;
+            padding: 10px;
+            overflow: hidden;
+        }
+
+        .mem-box {
+            position: absolute;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            transition: all 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+            width: 170px;
+        }
+
+        .mem-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+
+        .base-box {
+            border: 2px solid var(--green-base);
+            background-color: rgba(46, 204, 113, 0.15);
+            left: 20px;
+            top: 80px;
+        }
+
+        .dynamic-box {
+            border: 2px solid var(--blue-dynamic);
+            background-color: rgba(52, 152, 219, 0.15);
+            right: 20px;
+            top: 40px; /* 初始位置 */
+        }
+
+        /* SVG 连线系统 */
+        .pointer-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .arrow-line {
+            stroke: #f1c40f;
+            stroke-width: 3;
+            fill: none;
+            stroke-dasharray: 6;
+            animation: dash 1s linear infinite;
+            transition: all 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        @keyframes dash {
+            to { stroke-dashoffset: -12; }
+        }
+
+        /* 下方的CE地址列表 */
+        .ce-address-list {
+            background-color: #1a1a22;
+            border: 1px solid #333;
+            height: 90px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 5px;
+        }
+
+        .list-header {
+            display: flex;
+            color: #888;
+            border-bottom: 1px solid #333;
+            padding-bottom: 3px;
+            margin-bottom: 4px;
+        }
+
+        .list-row {
+            display: flex;
+            padding: 3px 0;
+            align-items: center;
+        }
+
+        .col { flex: 1; text-align: left; padding-left: 5px;}
+        .col-frozen { width: 40px; text-align: center; }
+
+        /* 闪烁特效 */
+        .flash-red {
+            animation: flash-r 0.4s ease 2;
+        }
+        @keyframes flash-r {
+            0%, 100% { background-color: rgba(52, 152, 219, 0.15); }
+            50% { background-color: rgba(231, 76, 60, 0.6); }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Cheat Engine 动画演示：第 6 关 - 指针</h1>
+
+    <div class="step-control">
+        <div class="step-desc" id="stepDescription">
+            加载中...
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn" id="prevBtn" onclick="changeStep(-1)">上一步</button>
+            <button class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">下一步</button>
+        </div>
+    </div>
+
+    <div class="simulator">
+        
+        <div class="window">
+            <div class="window-title">🎮 虚拟游戏：Tutorial-i386.exe</div>
+            <div class="game-screen">
+                <div style="font-size: 18px; font-weight: bold;">当前目标：把血量锁定在 5000</div>
+                <div class="hp-bar-container">
+                    <div class="hp-bar" id="gameHpBar"></div>
+                    <div class="hp-text" id="gameHpText">100 / 100</div>
+                </div>
+                <div style="display: flex; gap: 10px; width: 100%; justify-content: center;">
+                    <button class="btn" style="background-color: #c0392b;" onclick="gameDeductHp()">💥 受到攻击 (-10血)</button>
+                    <button class="btn" id="restartGameBtn" style="background-color: #27ae60;" onclick="gameRestartAndChangePointer()">🔄 改变指针并重启游戏</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="window">
+            <div class="window-title">🔍 虚拟工具：Cheat Engine 7.x</div>
+            <div class="ce-layout">
+                
+                <div class="memory-visual-zone">
+                    <svg class="pointer-svg">
+                        <defs>
+                            <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                              <path d="M 0 1 L 10 5 L 0 9 z" fill="#f1c40f"/>
+                            </marker>
+                        </defs>
+                        <path id="pointerLine" class="arrow-line" d="M 0 0 L 0 0" marker-end="url(#arrow)" />
+                    </svg>
+
+                    <div class="mem-box base-box" id="baseBox">
+                        <div class="mem-title" style="color: var(--green-base);">🟢 静态基址 (只读)</div>
+                        <div id="baseAddrText">地址: 0x00401000</div>
+                        <div id="baseValText" style="font-weight: bold; margin-top:5px; color:#f1c40f">值: 0x01A2BF00</div>
+                    </div>
+
+                    <div class="mem-box dynamic-box" id="dynamicBox">
+                        <div class="mem-title" style="color: var(--blue-dynamic);">🔵 动态血量内存</div>
+                        <div id="dynAddrText">地址: 0x01A2BF00</div>
+                        <div id="dynValText" style="font-weight: bold; margin-top:5px;">值: 100</div>
+                    </div>
+                </div>
+
+                <div class="ce-address-list">
+                    <div class="list-header">
+                        <span class="col-frozen">冻结</span>
+                        <span class="col">描述</span>
+                        <span class="col">地址</span>
+                        <span class="col">类型</span>
+                        <span class="col">值</span>
+                    </div>
+                    <div id="ceAddressRows">
+                        </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 模拟器的底层核心状态
+        let currentStep = 1;
+        let gameHp = 100;
+        let isLockHp = false; // 是否激活了CE的冻结功能
+        
+        // 模拟游戏重启时，操作系统的内存分配列表（随机抽换，还原真实场景）
+        const memoryPool = [
+            { pointerTarget: "0x01A2BF00", topY: 30 },
+            { pointerTarget: "0x0356D110", topY: 100 },
+            { pointerTarget: "0x00A512A4", topY: 160 }
+        ];
+        let poolIndex = 0;
+
+        // 步骤定义手册
+        const steps = {
+            1: {
+                desc: "<strong>步骤 1/4 (初试扣血)：</strong> 先试着点击左边的游戏按钮 <strong>【💥 受到攻击】</strong>。观察右边：只有蓝色的“动态血量内存”的值在减少，绿色的基址值没有变。此时你如果直接双击地址改血，它确实能生效。",
+                render: () => {
+                    document.getElementById("restartGameBtn").disabled = true;
+                    isLockHp = false;
+                    renderAddressList("none");
+                }
+            },
+            2: {
+                desc: "<strong>步骤 2/4 (遭遇变动)：</strong> 重点来了！现在点击左侧游戏的 <strong>【🔄 改变指针并重启游戏】</strong>。你会发现：血量变回了100，但是<strong>蓝色的血量内存地址漂移了</strong>！原先被你抓到的地址变成了废纸。注意看绿色的【静态基址】，它的地址永远是 0x00401000，但它里面的<strong>箭头自动指向了新地址</strong>！",
+                render: () => {
+                    document.getElementById("restartGameBtn").disabled = false;
+                    isLockHp = false;
+                    renderAddressList("dynamic");
+                }
+            },
+            3: {
+                desc: "<strong>步骤 3/4 (添加指针)：</strong> 这就是为什么要找指针！我们在 CE 的地址列表中点击 'Add Address Manually'，勾选 <strong>Pointer</strong> 选项。在文本框填入基址 <code>0x00401000</code>，偏移量填 <code>0</code>。看看底部的地址列表，它现在完美通过基址读取到了血量！",
+                render: () => {
+                    document.getElementById("restartGameBtn").disabled = false;
+                    isLockHp = false;
+                    renderAddressList("pointer_inactive");
+                }
+            },
+            4: {
+                desc: "<strong>步骤 4/4 (锁定通关)：</strong> 现在，我们在 CE 中点击最左侧的 <strong>【冻结/Lock】复选框</strong>（锁定制值为 5000）。此时你再去点击游戏的【💥 受到攻击】或者【🔄 重启游戏】，指针都会自动顺着箭头找到新地址并锁死血量。通关成功！",
+                render: () => {
+                    document.getElementById("restartGameBtn").disabled = false;
+                    isLockHp = true;
+                    gameHp = 5000;
+                    updateUI();
+                    renderAddressList("pointer_active");
+                }
+            }
+        };
+
+        // 游戏：扣血逻辑
+        function gameDeductHp() {
+            if(isLockHp) {
+                // 如果激活了锁定，数值会被强行刷回5000，并触发红闪动画特效
+                gameHp = 5000;
+                flashDynamicBox();
+            } else {
+                gameHp = Math.max(0, gameHp - 10);
+            }
+            updateUI();
+        }
+
+        // 游戏：重启游戏并重定位内存（模拟动态分配内存）
+        function gameRestartAndChangePointer() {
+            poolIndex = (poolIndex + 1) % memoryPool.length;
+            gameHp = isLockHp ? 5000 : 100; // 重启时若未锁定则血量重置为100
+            
+            // 改变动态框在视窗里的高度坐标，用来体现“地址变化”的视觉冲击
+            const dBox = document.getElementById("dynamicBox");
+            dBox.style.top = memoryPool[poolIndex].topY + "px";
+            
+            updateUI();
+            
+            // 触发动态框闪烁
+            flashDynamicBox();
+        }
+
+        // 刷新所有界面数字与箭头的纽带
+        function updateUI() {
+            const currentMemState = memoryPool[poolIndex];
+            
+            // 1. 修改左侧游戏血条
+            const percent = (gameHp / 5000) * 100 < 1 ? (gameHp / 100) * 100 : (gameHp / 5000) * 100;
+            document.getElementById("gameHpBar").style.width = Math.min(100, percent) + "%";
+            document.getElementById("gameHpText").innerText = `${gameHp} / ${isLockHp?5000:100}`;
+            
+            // 2. 修改右侧内存模型中的文字
+            document.getElementById("baseValText").innerText = "值: " + currentMemState.pointerTarget;
+            document.getElementById("dynAddrText").innerText = "地址: " + currentMemState.pointerTarget;
+            document.getElementById("dynValText").innerText = "值: " + gameHp;
+
+            // 3. 实时重新绘制指向箭头
+            drawArrow();
+
+            // 4. 如果有地址列表，同步更新列表中的具体数字值
+            const valCell = document.getElementById("liveValueCell");
+            if(valCell) valCell.innerText = gameHp;
+            const addrCell = document.getElementById("liveAddrCell");
+            if(addrCell) {
+                if(currentStep === 2) addrCell.innerText = "0x01A2BF00 (已失效)";
+                else if(currentStep === 3 || currentStep === 4) addrCell.innerText = "P->" + currentMemState.pointerTarget;
+            }
+        }
+
+        // 绘制两个方框之间连线箭头的数学引擎
+        function drawArrow() {
+            const baseBox = document.getElementById("baseBox");
+            const dynBox = document.getElementById("dynamicBox");
+            const line = document.getElementById("pointerLine");
+
+            // 计算出绿框右侧边缘中心点作为起点
+            const startX = baseBox.offsetLeft + baseBox.offsetWidth;
+            const startY = baseBox.offsetTop + (baseBox.offsetHeight / 2);
+
+            // 计算出蓝框左侧边缘中心点作为终点
+            const endX = dynBox.offsetLeft;
+            const endY = dynBox.offsetTop + (dynBox.offsetHeight / 2);
+
+            // 利用 SVG 二次贝塞尔曲线让箭头带有一点弯曲，更具美感
+            line.setAttribute("d", `M ${startX} ${startY} Q ${(startX+endX)/2} ${(startY+endY)/2 - 20} ${endX} ${endY}`);
+        }
+
+        // 动画特效：内存被改写时闪烁红光
+        function flashDynamicBox() {
+            const box = document.getElementById("dynamicBox");
+            box.classList.remove("flash-red");
+            void box.offsetWidth; // 触发重绘
+            box.classList.add("flash-red");
+        }
+
+        // 控制底部地址列表的渲染模式
+        function renderAddressList(mode) {
+            const container = document.getElementById("ceAddressRows");
+            const currentMemState = memoryPool[poolIndex];
+            
+            if(mode === "none") {
+                container.innerHTML = `<div style="color:#555; text-align:center; padding-top:20px;">[ 当前未保存任何地址 ]</div>`;
+            } else if (mode === "dynamic") {
+                container.innerHTML = `
+                    <div class="list-row" style="color:#ff4757;">
+                        <span class="col-frozen"><input type="checkbox" disabled></span>
+                        <span class="col">血量旧地址</span>
+                        <span class="col" id="liveAddrCell">0x01A2BF00 (已失效)</span>
+                        <span class="col">4 Bytes</span>
+                        <span class="col">?? (读取失败)</span>
+                    </div>`;
+            } else if (mode === "pointer_inactive") {
+                container.innerHTML = `
+                    <div class="list-row" style="color:var(--green-base);">
+                        <span class="col-frozen"><input type="checkbox" onchange="goToStep4FromClick()"></span>
+                        <span class="col">我的第一个指针</span>
+                        <span class="col" id="liveAddrCell">P-&gt;${currentMemState.pointerTarget}</span>
+                        <span class="col">4 Bytes</span>
+                        <span class="col" id="liveValueCell">${gameHp}</span>
+                    </div>`;
+            } else if (mode === "pointer_active") {
+                container.innerHTML = `
+                    <div class="list-row" style="color:#f1c40f; background-color: rgba(241,196,15,0.08);">
+                        <span class="col-frozen"><input type="checkbox" checked disabled></span>
+                        <span class="col">我的第一个指针</span>
+                        <span class="col" id="liveAddrCell">P-&gt;${currentMemState.pointerTarget}</span>
+                        <span class="col">4 Bytes</span>
+                        <span class="col" id="liveValueCell">5000</span>
+                    </div>`;
+            }
+        }
+
+        function goToStep4FromClick() {
+            changeStep(1);
+        }
+
+        // 操控步骤的核心引擎
+        function changeStep(direction) {
+            currentStep += direction;
+            if (currentStep < 1) currentStep = 1;
+            if (currentStep > 4) currentStep = 4;
+
+            // 按钮状态禁用保护
+            document.getElementById("prevBtn").disabled = (currentStep === 1);
+            document.getElementById("nextBtn").disabled = (currentStep === 4);
+
+            // 更新描述和调用当前步骤的独立渲染器
+            document.getElementById("stepDescription").innerHTML = steps[currentStep].desc;
+            steps[currentStep].render();
+            
+            updateUI();
+        }
+
+        // 初始化加载
+        window.onload = () => {
+            changeStep(0);
+            // 延迟微调以确保高宽计算精准
+            setTimeout(updateUI, 100);
+        };
+
+        // 监听视口大小变化，防止箭头连线错位
+        window.onresize = drawArrow;
+    </script>
+</body>
+</html>

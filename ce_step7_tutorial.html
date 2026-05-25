@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Cheat Engine 第7关：代码注入(Code Injection) 动画教学模拟器</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1f;
+            --panel-bg: #252530;
+            --code-bg: #15151c;
+            --text-color: #e0e0e6;
+            --accent-green: #2ecc71;
+            --accent-blue: #3498db;
+            --accent-red: #e74c3c;
+            --accent-yellow: #f1c40f;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        /* 步骤控制条 */
+        .step-control {
+            background-color: var(--panel-bg);
+            padding: 15px;
+            border-radius: 8px;
+            width: 960px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .step-desc {
+            font-size: 15px;
+            max-width: 75%;
+            line-height: 1.6;
+        }
+
+        .step-desc strong {
+            color: var(--accent-yellow);
+        }
+
+        .btn {
+            background-color: #4a4a5a;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #5a5a70;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background-color: #222;
+            color: #555;
+            cursor: not-allowed;
+        }
+
+        .btn-primary { background-color: #8e44ad; }
+        .btn-primary:hover { background-color: #9b59b6; }
+
+        /* 主布局 */
+        .simulator {
+            display: flex;
+            gap: 20px;
+            width: 990px;
+        }
+
+        .window {
+            background-color: var(--panel-bg);
+            border: 2px solid #444;
+            border-radius: 6px;
+            flex: 1;
+            height: 480px;
+            padding: 15px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        .window-title {
+            font-weight: bold;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #444;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        /* 虚拟游戏内部样式 */
+        .game-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 25px;
+        }
+
+        .hp-bar-container {
+            width: 80%;
+            background-color: #444;
+            height: 26px;
+            border-radius: 13px;
+            overflow: hidden;
+            border: 2px solid #555;
+            position: relative;
+        }
+
+        .hp-bar {
+            width: 100%;
+            background: linear-gradient(90deg, #c0392b, #e74c3c);
+            height: 100%;
+            transition: width 0.3s ease, background 0.5s;
+        }
+
+        .hp-bar.buffed {
+            background: linear-gradient(90deg, #27ae60, #2ecc71);
+        }
+
+        .hp-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 3px;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        /* 反汇编/代码注入视窗样式 */
+        .code-view-container {
+            position: relative;
+            background-color: var(--code-bg);
+            border: 1px solid #333;
+            border-radius: 4px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+            overflow: hidden;
+        }
+
+        .code-block {
+            border-left: 3px solid #555;
+            padding-left: 10px;
+            margin-bottom: 15px;
+            z-index: 5;
+        }
+
+        .code-block-title {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .asm-line {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+            padding: 4px 6px;
+            border-radius: 3px;
+            margin: 2px 0;
+            display: flex;
+            transition: all 0.3s;
+        }
+
+        .asm-addr { color: #7f8c8d; width: 90px; }
+        .asm-inst { color: #f1c40f; width: 160px; }
+        .asm-comment { color: #7f8c8d; font-style: italic; }
+
+        /* 特殊高亮与突变样式 */
+        .line-target { background-color: rgba(231, 76, 60, 0.15); border: 1px dashed rgba(231, 76, 60, 0.4); }
+        .line-jmp { background-color: rgba(52, 152, 219, 0.15); border: 1px dashed rgba(52, 152, 219, 0.4); }
+        .line-cave { background-color: rgba(46, 204, 113, 0.15); }
+
+        /* SVG 粒子流向引线 */
+        .flow-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .flow-path {
+            stroke: #555;
+            stroke-width: 2;
+            fill: none;
+            transition: all 0.5s;
+        }
+
+        .flow-path.active {
+            stroke: var(--accent-blue);
+            stroke-width: 2.5;
+        }
+
+        /* 奔跑的CPU指令流执行点粒子 */
+        .cpu-particle {
+            fill: #fff;
+            filter: drop-shadow(0 0 4px var(--accent-yellow));
+            visibility: hidden;
+        }
+
+        .animate-particle {
+            animation: moveCPU 1.2s cubic-bezier(0.45, 0, 0.55, 1) forwards;
+        }
+
+        @keyframes moveCPU {
+            0% { offset-distance: 0%; visibility: visible; }
+            100% { offset-distance: 100%; visibility: visible; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Cheat Engine 动画演示：第 7 关 - 代码注入</h1>
+
+    <div class="step-control">
+        <div class="step-desc" id="stepDescription">
+            正在初始化教程...
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn" id="prevBtn" onclick="changeStep(-1)">上一步</button>
+            <button class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">下一步</button>
+        </div>
+    </div>
+
+    <div class="simulator">
+        
+        <div class="window">
+            <div class="window-title">🎮 虚拟游戏：Tutorial-i386.exe</div>
+            <div class="game-screen">
+                <div style="font-size: 16px; font-weight: bold; text-align: center;">目标：使【点击扣血】按钮变成【点击加血/不扣血】</div>
+                <div class="hp-bar-container">
+                    <div class="hp-bar" id="gameHpBar"></div>
+                    <div class="hp-text" id="gameHpText">100 / 100</div>
+                </div>
+                <button class="btn" id="hitBtn" style="background-color: #c0392b; padding: 12px 24px; font-size: 16px;" onclick="triggerHit()">💥 点击扣血 (减10)</button>
+            </div>
+        </div>
+
+        <div class="window">
+            <div class="window-title">💻 虚拟 CE 反汇编窗口 (Memory Viewer)</div>
+            
+            <div class="code-view-container">
+                <svg class="flow-svg">
+                    <path id="cpuPath" class="flow-path" d="M 0 0 L 0 0" />
+                    <circle id="cpuDot" class="cpu-particle" r="5" />
+                </svg>
+
+                <div class="code-block" style="border-left-color: var(--accent-blue);" id="originalCodeBlock">
+                    <div class="code-block-title">游戏原本的代码段 (Main Module)</div>
+                    <div class="asm-line" id="lineBefore">
+                        <span class="asm-addr">00405A10</span>
+                        <span class="asm-inst">mov eax, [ebx+04]</span>
+                        <span class="asm-comment">// 读取底层数据</span>
+                    </div>
+                    <div class="asm-line line-target" id="injectTargetLine">
+                        <span class="asm-addr">00405A15</span>
+                        <span class="asm-inst" id="targetInstruction">sub dword ptr [ebx+14], 0A</span>
+                        <span class="asm-comment" id="targetComment">// 【关键】扣除10点血量</span>
+                    </div>
+                    <div class="asm-line" id="lineAfter">
+                        <span class="asm-addr">00405A1A</span>
+                        <span class="asm-inst">cmp dword ptr [ebx+14], 00</span>
+                        <span class="asm-comment">// 检查玩家是否死亡</span>
+                    </div>
+                </div>
+
+                <div class="code-block" style="border-left-color: var(--accent-green); margin-bottom: 0;">
+                    <div class="code-block-title">CE 开辟的独立代码洞 (Code Cave)</div>
+                    <div id="caveContent">
+                        <div class="asm-line" style="color: #555;">
+                            <span class="asm-addr">00800000</span>
+                            <span class="asm-inst">db 00 00 00 00</span>
+                            <span class="asm-comment">// 尚未注入，此处是空白内存(零)</span>
+                        </div>
+                        <div class="asm-line" style="color: #555;">
+                            <span class="asm-addr">00800004</span>
+                            <span class="asm-inst">db 00 00 00 00</span>
+                            <span class="asm-comment">// 尚未注入</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let currentStep = 1;
+        let gameHp = 100;
+        let hackMode = "normal"; // normal: 原生扣血, jump: 已注入劫持执行流
+
+        // 步骤导航定义
+        const steps = {
+            1: {
+                desc: "<strong>步骤 1/4 (寻找指令)：</strong> 每一当你在游戏中被攻击时，CPU就会调用一段代码执行。点击左侧的 <strong>【💥 点击扣血】</strong>。观察右边：白色光点代表 CPU 的执行序列(EIP)，它正笔直、机械地顺着地址执行，毫无阻拦地触发了 <code>sub</code> 减血指令。",
+                action: () => {
+                    hackMode = "normal";
+                    setupNormalUI();
+                }
+            },
+            2: {
+                desc: "<strong>步骤 2/4 (拦截并搭建跳转)：</strong> 我们对准减血指令右键选择 'Find out what writes to this address'，然后点击 <strong>Show Disassembler -> Auto Hack -> Code Injection</strong>。此时，CE在内存空闲区（地址 <code>00800000</code>）强行申请了一个<strong>【代码洞 (Code Cave)】</strong>！",
+                action: () => {
+                    hackMode = "normal";
+                    setupNormalUI();
+                    // 仅高亮提示，不改变行为
+                }
+            },
+            3: {
+                desc: "<strong>步骤 3/4 (拦截行为 - 骨架重塑)：</strong> 见证奇迹的时刻！CE把原本的 <code>sub</code> 剪碎，替换为 <code>jmp 00800000</code>。这意味着一旦游戏试图执行扣血，就会被强制**强行折跃**到我们的地盘！同时，CE会自动把原本被破坏的指令先复制到代码洞中备用。",
+                action: () => {
+                    hackMode = "jump";
+                    setupInjectedUI(false); // 仅仅备份，没有改核心逻辑
+                }
+            },
+            4: {
+                desc: "<strong>步骤 4/4 (改写逻辑 - 反向加血)：</strong> 我们在代码洞中，把复制过来的 <code>sub</code> 删掉，手动改成 <code>add dword ptr [ebx+14], 0A</code> (加10血)！现在去点击左侧游戏的 <strong>【💥 点击扣血】</strong> 按钮，你会发现粒子发生了折跃绕路，而游戏血量不仅没少，反而**越打血越多**！大功告成！",
+                action: () => {
+                    hackMode = "jump";
+                    setupInjectedUI(true); // 彻底改成加血代码
+                }
+            }
+        };
+
+        // 按钮触发扣血/加血及CPU粒子动画联动
+        function triggerHit() {
+            // 1. 先触发 CPU 粒子的流动运动轨迹
+            animateCPUParticle();
+
+            // 2. 延迟一定时间（当粒子运动到对应的改写核心点时）改变血量数值
+            setTimeout(() => {
+                if (hackMode === "normal") {
+                    gameHp = Math.max(0, gameHp - 10);
+                } else {
+                    // 如果走到了第4步注入完成了
+                    if(currentStep === 4) {
+                        gameHp = Math.min(100, gameHp + 10);
+                    } else {
+                        // 第3步时只是跳转并还原，依然维持扣血
+                        gameHp = Math.max(0, gameHp - 10);
+                    }
+                }
+                updateGameUI();
+            }, 600);
+        }
+
+        // 刷新游戏界面的HP展示
+        function updateGameUI() {
+            const bar = document.getElementById("gameHpBar");
+            bar.style.width = gameHp + "%";
+            document.getElementById("gameHpText").innerText = gameHp + " / 100";
+
+            if(currentStep === 4) {
+                bar.classList.add("buffed");
+            } else {
+                bar.classList.remove("buffed");
+            }
+        }
+
+        // 渲染状态 1 & 2: 原生未注入状态
+        function setupNormalUI() {
+            document.getElementById("injectTargetLine").className = "asm-line line-target";
+            document.getElementById("targetInstruction").innerText = "sub dword ptr [ebx+14], 0A";
+            document.getElementById("targetComment").innerText = "// 【关键】扣除10点血量";
+
+            document.getElementById("caveContent").innerHTML = `
+                <div class="asm-line" style="color: #555;">
+                    <span class="asm-addr">00800000</span>
+                    <span class="asm-inst">db 00 00 00 00</span>
+                    <span class="asm-comment">// 尚未注入，此处是空白填充区</span>
+                </div>
+                <div class="asm-line" style="color: #555;">
+                    <span class="asm-addr">00800004</span>
+                    <span class="asm-inst">db 00 00 00 00</span>
+                    <span class="asm-comment">// 尚未注入</span>
+                </div>`;
+            
+            // 重新绘制并激活静态背景连线轨迹
+            setTimeout(() => drawStaticPaths(), 50);
+        }
+
+        // 渲染状态 3 & 4: 注入劫持状态
+        function setupInjectedUI(isAddHpMode) {
+            document.getElementById("injectTargetLine").className = "asm-line line-jmp";
+            document.getElementById("targetInstruction").innerText = "jmp 00800000";
+            document.getElementById("targetComment").innerText = "// 🔥 拦截执行权！跳跃到外部代码洞";
+
+            if(!isAddHpMode) {
+                // 第3步：搭建好了骨架，只是原封不动搬运
+                document.getElementById("caveContent").innerHTML = `
+                    <div class="asm-line line-cave">
+                        <span class="asm-addr">00800000</span>
+                        <span class="asm-inst" style="color:#e74c3c;">sub dword ptr [ebx+14], 0A</span>
+                        <span class="asm-comment">// 暂未改动：CE 自动备份的原指令</span>
+                    </div>
+                    <div class="asm-line line-cave">
+                        <span class="asm-addr">00800005</span>
+                        <span class="asm-inst">jmp 00405A1A</span>
+                        <span class="asm-comment">// ↩️ 顺承完毕，跳回原游戏下一行指令</span>
+                    </div>`;
+            } else {
+                // 第4步：核心篡改，反向加血
+                document.getElementById("caveContent").innerHTML = `
+                    <div class="asm-line line-cave" style="box-shadow: inset 0 0 8px rgba(46,204,113,0.4);">
+                        <span class="asm-addr">00800000</span>
+                        <span class="asm-inst" style="color:var(--accent-green); font-weight:bold;">add dword ptr [ebx+14], 0A</span>
+                        <span class="asm-comment">// 😎 篡改成功！把减血变成【加血】</span>
+                    </div>
+                    <div class="asm-line line-cave">
+                        <span class="asm-addr">00800005</span>
+                        <span class="asm-inst">jmp 00405A1A</span>
+                        <span class="asm-comment">// ↩️ 执行完毕，神不知鬼不觉跳回原程序</span>
+                    </div>`;
+            }
+
+            setTimeout(() => drawStaticPaths(), 50);
+        }
+
+        // 绘制 CPU 静态路径及挂载运动的核心函数
+        function drawStaticPaths() {
+            const lineBefore = document.getElementById("lineBefore");
+            const injectTarget = document.getElementById("injectTargetLine");
+            const lineAfter = document.getElementById("lineAfter");
+            const caveLines = document.getElementsByClassName("line-cave");
+            const pathSvg = document.getElementById("cpuPath");
+
+            const getRightPos = (el) => ({
+                x: el.offsetLeft + el.offsetWidth - 20,
+                y: el.offsetTop + (el.offsetHeight / 2)
+            });
+            const getLeftPos = (el) => ({
+                x: el.offsetLeft + 10,
+                y: el.offsetTop + (el.offsetHeight / 2)
+            });
+
+            let p1 = getRightPos(lineBefore);
+            let p2 = getRightPos(injectTarget);
+            let p3 = getRightPos(lineAfter);
+
+            if (hackMode === "normal") {
+                pathSvg.setAttribute("d", `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y}`);
+                pathSvg.className.baseVal = "flow-path";
+            } else {
+                // 劫持跳转状态，画出环绕绕路路径曲线
+                let pCaveStart = getLeftPos(caveLines[0]);
+                let pCaveEnd = getRightPos(caveLines[1]);
+
+                pathSvg.setAttribute("d", 
+                    `M ${p1.x} ${p1.y} ` + // 起点
+                    `C ${p2.x + 80} ${p2.y - 10}, ${pCaveStart.x - 80} ${pCaveStart.y - 10}, ${pCaveStart.x} ${pCaveStart.y} ` + // 跃向代码洞
+                    `L ${pCaveEnd.x} ${pCaveEnd.y} ` + // 执行洞内指令
+                    `C ${pCaveEnd.x + 80} ${pCaveEnd.y + 20}, ${p3.x + 80} ${p3.y + 20}, ${p3.x} ${p3.y}` // 跳回下一行
+                );
+                pathSvg.className.baseVal = "flow-path active";
+            }
+        }
+
+        // 驱动 CPU 粒子沿着路径跑动的动画核心
+        function animateCPUParticle() {
+            const dot = document.getElementById("cpuDot");
+            const path = document.getElementById("cpuPath");
+            
+            // 为粒子绑定当前的 SVG 路径作为它的跑道
+            dot.style.offsetPath = `path('${path.getAttribute("d")}')`;
+            
+            // 移除老动画重新添加以重置触发
+            dot.classList.remove("animate-particle");
+            void dot.offsetWidth;
+            dot.classList.add("animate-particle");
+        }
+
+        // 切换步骤的处理中心
+        function changeStep(direction) {
+            currentStep += direction;
+            if (currentStep < 1) currentStep = 1;
+            if (currentStep > 4) currentStep = 4;
+
+            document.getElementById("prevBtn").disabled = (currentStep === 1);
+            document.getElementById("nextBtn").disabled = (currentStep === 4);
+
+            document.getElementById("stepDescription").innerHTML = steps[currentStep].desc;
+            steps[currentStep].action();
+
+            updateGameUI();
+        }
+
+        // 初始化
+        window.onload = () => {
+            changeStep(0);
+            window.addEventListener('resize', drawStaticPaths);
+        };
+    </script>
+</body>
+</html>
