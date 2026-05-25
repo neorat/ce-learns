@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Cheat Engine 第9关：共享代码与敌我区分 动画教学模拟器</title>
+    <style>
+        :root {
+            --bg-color: #0f0f13;
+            --panel-bg: #1a1a24;
+            --code-bg: #0d0d12;
+            --text-color: #e2e2eb;
+            --player-green: #2ecc71;
+            --enemy-red: #e74c3c;
+            --accent-blue: #3498db;
+            --accent-yellow: #f1c40f;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        /* 步骤控制面板 */
+        .step-control {
+            background-color: var(--panel-bg);
+            padding: 15px;
+            border-radius: 8px;
+            width: 1050px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #2d2d3d;
+        }
+
+        .step-desc {
+            font-size: 14px;
+            max-width: 78%;
+            line-height: 1.6;
+        }
+
+        .step-desc strong {
+            color: var(--accent-yellow);
+        }
+
+        .btn {
+            background-color: #353545;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #45455a;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background-color: #15151a;
+            color: #444;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 主体布局 */
+        .simulator {
+            display: flex;
+            gap: 20px;
+            width: 1080px;
+        }
+
+        .window {
+            background-color: var(--panel-bg);
+            border: 2px solid #2d2d3d;
+            border-radius: 6px;
+            height: 540px;
+            padding: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        .window-title {
+            font-weight: bold;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #2d2d3d;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #888;
+        }
+
+        /* 左侧：虚拟战场和角色 */
+        .battle-window { width: 440px; }
+        .battle-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .char-card {
+            background-color: #13131a;
+            border-radius: 6px;
+            padding: 10px;
+            border-style: solid;
+            border-width: 2px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+        }
+
+        .team-hero { border-color: var(--player-green); }
+        .team-enemy { border-color: var(--enemy-red); }
+
+        .char-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .mini-hp-container {
+            background-color: #333;
+            height: 14px;
+            border-radius: 7px;
+            overflow: hidden;
+            position: relative;
+        }
+        .mini-hp-bar {
+            height: 100%;
+            width: 100%;
+            transition: width 0.3s;
+        }
+        .team-hero .mini-hp-bar { background-color: var(--player-green); }
+        .team-enemy .mini-hp-bar { background-color: var(--enemy-red); }
+
+        .struct-tag {
+            font-family: monospace;
+            font-size: 10px;
+            color: #888;
+            background: #222;
+            padding: 2px 4px;
+            border-radius: 3px;
+            text-align: center;
+        }
+
+        /* 右侧：代码视图与SVG */
+        .code-window { width: 620px; }
+        .code-zone {
+            position: relative;
+            background-color: var(--code-bg);
+            border: 1px solid #222;
+            border-radius: 4px;
+            flex: 1;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow: hidden;
+        }
+
+        .asm-block {
+            border-left: 3px solid #444;
+            padding-left: 10px;
+            margin-bottom: 15px;
+            z-index: 5;
+        }
+        .asm-block-title {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        .asm-row {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12.5px;
+            padding: 3px 5px;
+            display: flex;
+        }
+        .c-addr { color: #555; width: 80px; }
+        .c-inst { color: var(--accent-yellow); width: 210px; }
+        .c-comm { color: #666; font-style: italic; }
+
+        /* 特殊代码行高亮 */
+        .row-shared { background-color: rgba(52, 152, 219, 0.1); border: 1px dashed rgba(52,152,219,0.3); }
+        .row-cave { background-color: rgba(155, 89, 182, 0.1); }
+        .row-smart-active { background-color: rgba(155, 89, 182, 0.25); border: 1px solid #9b59b6; }
+
+        /* SVG 执行流系统 */
+        .flow-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .base-path { stroke: #333; stroke-width: 1.5; fill: none; transition: d 0.5s; }
+        .base-path.active { stroke: #555; stroke-width: 2; }
+
+        /* 跑动粒子配置 */
+        .dot-particle { r: 5; visibility: hidden; }
+        .p-green { fill: var(--player-green); filter: drop-shadow(0 0 4px var(--player-green)); }
+        .p-red { fill: var(--enemy-red); filter: drop-shadow(0 0 4px var(--enemy-red)); }
+
+        .run-anim { animation: runTrack 1.1s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+        @keyframes runTrack {
+            0% { offset-distance: 0%; visibility: visible; }
+            100% { offset-distance: 100%; visibility: visible; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Cheat Engine 动画演示：第 9 关 - 共享代码与敌我区分</h1>
+
+    <div class="step-control">
+        <div class="step-desc" id="stepDescription">载入数据结构中...</div>
+        <div style="display: flex; gap: 8px;">
+            <button class="btn" id="prevBtn" onclick="changeStep(-1)">上一步</button>
+            <button class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">下一步</button>
+        </div>
+    </div>
+
+    <div class="simulator">
+        
+        <div class="window battle-window">
+            <div class="window-title">⚔️ 虚拟客户端：范围AOE战场测试</div>
+            <div class="battle-grid">
+                <div class="char-card team-hero" id="c-p1">
+                    <div class="char-info"><span>🟢 玩家(你)</span><span id="txt-p1">100/100</span></div>
+                    <div class="mini-hp-container"><div class="mini-hp-bar" id="bar-p1"></div></div>
+                    <div class="struct-tag">阵营偏移 [ebx+1C] = 1 (友方)</div>
+                </div>
+                <div class="char-card team-hero" id="c-p2">
+                    <div class="char-info"><span>🟢 友方NPC</span><span id="txt-p2">100/100</span></div>
+                    <div class="mini-hp-container"><div class="mini-hp-bar" id="bar-p2"></div></div>
+                    <div class="struct-tag">阵营偏移 [ebx+1C] = 1 (友方)</div>
+                </div>
+                <div class="char-card team-enemy" id="c-e1">
+                    <div class="char-info"><span>🔴 怪物 01</span><span id="txt-e1">100/100</span></div>
+                    <div class="mini-hp-container"><div class="mini-hp-bar" id="bar-e1"></div></div>
+                    <div class="struct-tag">阵营偏移 [ebx+1C] = 0 (敌方)</div>
+                </div>
+                <div class="char-card team-enemy" id="c-e2">
+                    <div class="char-info"><span>🔴 恶魔 BOSS</span><span id="txt-e2">100/100</span></div>
+                    <div class="mini-hp-container"><div class="mini-hp-bar" id="bar-e2"></div></div>
+                    <div class="struct-tag">阵营偏移 [ebx+1C] = 0 (敌方)</div>
+                </div>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
+                <button class="btn" style="background-color: #d35400; font-size:15px; padding:12px;" onclick="castAoeAttack()">⚡ 释放全屏雷电术 (全员减血15)</button>
+                <button class="btn" style="background-color: #27ae60; font-size:12px;" onclick="resetHp()">🔄 恢复全员血量</button>
+            </div>
+        </div>
+
+        <div class="window code-window">
+            <div class="window-title">💻 虚拟 CE 内存分析器 (Shared Code Analysis)</div>
+            <div class="code-zone">
+                
+                <svg class="flow-layer">
+                    <path id="svgTrack" class="base-path" d="M 0 0 L 0 0" />
+                    <circle id="dotHero" class="dot-particle p-green" />
+                    <circle id="dotEnemy" class="dot-particle p-red" />
+                </svg>
+
+                <div class="asm-block" style="border-left-color: var(--accent-blue);">
+                    <div class="asm-block-title">游戏核心物理计算引擎代码段</div>
+                    <div class="asm-row" id="rowPrefix">
+                        <span class="c-addr">00431A20</span><span class="c-inst">mov edx, [ebx+08]</span><span class="c-comm">// 载入目标坐标</span>
+                    </div>
+                    <div class="asm-row row-shared" id="rowShared">
+                        <span class="c-addr">00431A25</span><span class="c-inst" id="instShared">sub dword ptr [ebx+14], eax</span><span class="c-comm" id="commShared">// 💥 所有人共享的扣血行</span>
+                    </div>
+                    <div class="asm-row" id="rowSuffix">
+                        <span class="c-addr">00431A2A</span><span class="c-inst">pop ebx</span><span class="c-comm">// 恢复栈平衡</span>
+                    </div>
+                </div>
+
+                <div class="asm-block" style="border-left-color: #9b59b6; margin-bottom: 0;">
+                    <div class="asm-block-title">高级注入拓展舱 (Smart Code Cave)</div>
+                    <div id="caveBox">
+                        <div class="asm-row" style="color: #444;">
+                            <span class="c-addr">00850000</span><span class="c-inst">db 00 00 00 00</span><span class="c-comm">// 尚未申请内存洞</span>
+                        </div>
+                        <div class="asm-row" style="color: #444;">
+                            <span class="c-addr">00850004</span><span class="c-inst">db 00 00 00 00</span><span class="c-comm">// 空白填充</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let currentStep = 1;
+        let hpList = { p1: 100, p2: 100, e1: 100, e2: 100 };
+        let injectState = "none"; // none: 原生, blind: 盲目全无敌, smart: 智能敌我区分
+
+        // 步骤控制流状态手册
+        const stepBook = {
+            1: {
+                desc: "<strong>步骤 1/4 (共享代码噩梦)：</strong> 游戏为了省空间，玩家和怪物扣血都调用同一条指令 <code>sub ptr [ebx+14]</code>。点击左边的 <strong>【⚡ 释放全屏雷电术】</strong>，你会看到绿色和红色的 CPU 指令点同时涌入该指令，结果<strong>不分敌我，全员一起掉血</strong>。",
+                action: () => { injectState = "none"; setupUI_None(); }
+            },
+            2: {
+                desc: "<strong>步骤 2/4 (盲目注入的翻车现场)：</strong> 如果你像第 7 关那样盲目改写，把该行直接换成 <code>nop</code>。点击下一步试试看！此时点击雷电术，你会发现绿色和红色的粒子流都没有触发伤害。完蛋了，<strong>你虽然无敌了，但怪物也变成刀枪不入的无敌状态了</strong>！",
+                action: () => { injectState = "blind"; setupUI_Blind(); }
+            },
+            3: {
+                desc: "<strong>步骤 3/4 (解剖结构体寻根)：</strong> 必须找特征！我们把玩家和怪物同时拉入 CE 的 <strong>‘Dissect data/structures’（解剖结构体）</strong> 中对比。终于发现：在偏移 <code>1C</code> 的地方，友方的数值是 <code>1</code>，而怪物的数值是 <code>0</code>！这就是判定敌我的终极密码！",
+                action: () => { injectState = "blind"; setupUI_Blind(); }
+            },
+            4: {
+                desc: "<strong>步骤 4/4 (智能分支折跃 - 降维打击)：</strong> 在代码洞中填入汇编分支：先用 <code>cmp [ebx+1C], 01</code> 检查是不是自己人。如果是自己人(je)，就直接跳过减血代码；如果不是，则顺承执行原版扣血。现在再去放雷电术，<strong>看粒子发生了分流绕路！怪狂掉血，而你和盟友彻底免疫！</strong> 成功通关！",
+                action: () => { injectState = "smart"; setupUI_Smart(); }
+            }
+        };
+
+        // 核心动作：全屏雷电术AOE
+        function castAoeAttack() {
+            // 1. 驱动双色粒子沿着当前的 SVG 轨迹起跑
+            runParticles();
+
+            // 2. 轨迹跑到一半时，触发具体的血量结算
+            setTimeout(() => {
+                if (injectState === "none") {
+                    hpList.p1 = Math.max(0, hpList.p1 - 15);
+                    hpList.p2 = Math.max(0, hpList.p2 - 15);
+                    hpList.e1 = Math.max(0, hpList.e1 - 15);
+                    hpList.e2 = Math.max(0, hpList.e2 - 15);
+                } else if (injectState === "blind") {
+                    // 盲目全无敌状态下，均不扣血
+                } else if (injectState === "smart") {
+                    // 智能区分：只有怪扣血，自己和盟友不扣
+                    hpList.e1 = Math.max(0, hpList.e1 - 15);
+                    hpList.e2 = Math.max(0, hpList.e2 - 15);
+                }
+                syncBattleField();
+            }, 550);
+        }
+
+        // 恢复全员血量
+        function resetHp() {
+            hpList = { p1: 100, p2: 100, e1: 100, e2: 100 };
+            syncBattleField();
+        }
+
+        // 同步左侧战场的血量和状态
+        function syncBattleField() {
+            Object.keys(hpList).forEach(key => {
+                document.getElementById(`bar-${key}`).style.width = hpList[key] + "%";
+                document.getElementById(`txt-${key}`).innerText = hpList[key] + " / 100";
+            });
+        }
+
+        // 渲染阶段 1：原生模式
+        function setupUI_None() {
+            document.getElementById("rowShared").className = "asm-row row-shared";
+            document.getElementById("instShared").innerText = "sub dword ptr [ebx+14], eax";
+            document.getElementById("commShared").innerText = "// 💥 所有人共享的扣血行";
+
+            document.getElementById("caveBox").innerHTML = `
+                <div class="asm-row" style="color: #444;"><span class="c-addr">00850000</span><span class="c-inst">db 00 00 00 00</span><span class="c-comm">// 尚未开辟</span></div>
+                <div class="asm-row" style="color: #444;"><span class="c-addr">00850004</span><span class="c-inst">db 00 00 00 00</span><span class="c-comm">// 尚未开辟</span></div>`;
+            setTimeout(drawTracks, 50);
+        }
+
+        // 渲染阶段 2 & 3：盲目全无敌（全换成NOP）
+        function setupUI_Blind() {
+            document.getElementById("rowShared").className = "asm-row row-shared";
+            document.getElementById("instShared").innerText = "nop (原为sub指令)";
+            document.getElementById("commShared").innerText = "// 🛑 盲目抹除伤害指令（敌我都无敌了！）";
+
+            document.getElementById("caveBox").innerHTML = `
+                <div class="asm-row" style="color: #444;"><span class="c-addr">00850000</span><span class="c-inst">db 00 00 00 00</span><span class="c-comm">// 此时无需外挂代码洞</span></div>`;
+            setTimeout(drawTracks, 50);
+        }
+
+        // 渲染阶段 4：高级敌我区分注入
+        function setupUI_Smart() {
+            document.getElementById("rowShared").className = "asm-row row-smart-active";
+            document.getElementById("instShared").innerText = "jmp 00850000";
+            document.getElementById("commShared").innerText = "// ↩️ 拦截执行权，移交特工代码洞处理";
+
+            document.getElementById("caveBox").innerHTML = `
+                <div class="asm-row row-cave"><span class="c-addr">00850000</span><span class="c-inst" style="color:#f1c40f;">cmp dword ptr [ebx+1C], 01</span><span class="c-comm">// 🛡️ 提取阵营密码：是友方吗？</span></div>
+                <div class="asm-row row-cave"><span class="c-addr">00850005</span><span class="c-inst" style="color:var(--player-green); font-weight:bold;">je 00431A2A</span><span class="c-comm">// 🟢 如果是友方，直接飞离跳过扣血！</span></div>
+                <div class="asm-row row-cave"><span class="c-addr">0085000A</span><span class="c-inst" style="color:var(--enemy-red);">sub dword ptr [ebx+14], eax</span><span class="c-comm">// 🔴 如果是怪，老实吃下原始伤害</span></div>
+                <div class="asm-row row-cave"><span class="c-addr">0085000F</span><span class="c-inst">jmp 00431A2A</span><span class="c-comm">// ↩️ 惩罚完毕，归还执行流</span></div>`;
+            setTimeout(drawTracks, 50);
+        }
+
+        // 根据状态画出粒子行驶轨迹的数学算法
+        function drawTracks() {
+            const prefix = document.getElementById("rowPrefix");
+            const shared = document.getElementById("rowShared");
+            const suffix = document.getElementById("rowSuffix");
+            const caveRows = document.getElementsByClassName("row-cave");
+            const pathSvg = document.getElementById("svgTrack");
+
+            const getRPos = (el) => ({ x: el.offsetLeft + el.offsetWidth - 20, y: el.offsetTop + el.offsetHeight / 2 });
+            const getLPos = (el) => ({ x: el.offsetLeft + 10, y: el.offsetTop + el.offsetHeight / 2 });
+
+            let p1 = getRPos(prefix);
+            let p2 = getRPos(shared);
+            let p3 = getRPos(suffix);
+
+            if (injectState !== "smart") {
+                // 原生或盲目模式：直线行驶
+                pathSvg.setAttribute("d", `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y}`);
+                pathSvg.className.baseVal = "base-path";
+            } else {
+                // 智能模式：构建出复杂的折跃分流路径
+                let pCaveStart = getLPos(caveRows[0]);
+                let pCaveJe = getRPos(caveRows[1]);
+                let pCaveSub = getRPos(caveRows[2]);
+
+                // 生成复合 SVG 路径
+                pathSvg.setAttribute("d", 
+                    `M ${p1.x} ${p1.y} ` + 
+                    `C ${p2.x + 40} ${p2.y - 15}, ${pCaveStart.x - 40} ${pCaveStart.y - 15}, ${pCaveStart.x} ${pCaveStart.y} ` + 
+                    `L ${pCaveJe.x} ${pCaveJe.y} ` + 
+                    `L ${pCaveSub.x} ${pCaveSub.y} ` + 
+                    `C ${pCaveSub.x + 60} ${pCaveSub.y + 10}, ${p3.x + 60} ${p3.y + 10}, ${p3.x} ${p3.y}`
+                );
+                pathSvg.className.baseVal = "base-path active";
+            }
+        }
+
+        // 粒子点动画发射引擎
+        function runParticles() {
+            const trackD = document.getElementById("svgTrack").getAttribute("d");
+            
+            const dotH = document.getElementById("dotHero");
+            const dotE = document.getElementById("dotEnemy");
+
+            // 挂载跑道
+            dotH.style.offsetPath = `path('${trackD}')`;
+            dotE.style.offsetPath = `path('${trackD}')`;
+
+            // 重置并激活动画
+            [dotH, dotE].forEach(d => {
+                d.classList.remove("run-anim");
+                void d.offsetWidth;
+                d.classList.add("run-anim");
+            });
+        }
+
+        // 步骤中控
+        function changeStep(dir) {
+            currentStep += dir;
+            if (currentStep < 1) currentStep = 1;
+            if (currentStep > 4) currentStep = 4;
+
+            document.getElementById("prevBtn").disabled = (currentStep === 1);
+            document.getElementById("nextBtn").disabled = (currentStep === 4);
+
+            document.getElementById("stepDescription").innerHTML = stepBook[currentStep].desc;
+            stepBook[currentStep].action();
+            syncBattleField();
+        }
+
+        window.onload = () => {
+            changeStep(0);
+            window.addEventListener('resize', drawTracks);
+        };
+    </script>
+</body>
+</html>

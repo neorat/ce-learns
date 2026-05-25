@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Cheat Engine 第8关：多级指针(Multilevel Pointers) 动画教学模拟器</title>
+    <style>
+        :root {
+            --bg-color: #121216;
+            --panel-bg: #1e1e26;
+            --text-color: #e2e2e9;
+            --green-base: #2ecc71;
+            --blue-dynamic: #3498db;
+            --purple-ptr: #9b59b6;
+            --accent-yellow: #f1c40f;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        /* 步骤控制面板 */
+        .step-control {
+            background-color: var(--panel-bg);
+            padding: 15px;
+            border-radius: 8px;
+            width: 1000px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #333;
+        }
+
+        .step-desc {
+            font-size: 14px;
+            max-width: 75%;
+            line-height: 1.6;
+        }
+
+        .step-desc strong {
+            color: var(--accent-yellow);
+        }
+
+        .btn {
+            background-color: #3a3a4a;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #4a4a60;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background-color: #1a1a20;
+            color: #444;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-primary { background-color: #8e44ad; }
+        .btn-primary:hover { background-color: #9b59b6; }
+
+        /* 主体布局 */
+        .simulator {
+            display: flex;
+            gap: 20px;
+            width: 1030px;
+        }
+
+        .window {
+            background-color: var(--panel-bg);
+            border: 2px solid #3a3a4a;
+            border-radius: 6px;
+            height: 520px;
+            padding: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        .window-title {
+            font-weight: bold;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #3a3a4a;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        /* 游戏界面 */
+        .game-window { width: 350px; }
+        .game-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 30px;
+        }
+
+        .hp-bar-container {
+            width: 90%;
+            background-color: #333;
+            height: 24px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #444;
+            position: relative;
+        }
+
+        .hp-bar {
+            width: 100%;
+            background: linear-gradient(90deg, #9b59b6, #8e44ad);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .hp-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 2px;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        /* CE多级内存网格（核心动画区） */
+        .ce-window { width: 660px; }
+        .memory-chain-zone {
+            position: relative;
+            background-color: #0d0d11;
+            border: 1px solid #2a2a35;
+            border-radius: 4px;
+            height: 350px;
+            overflow: hidden;
+        }
+
+        /* 内存盒通用样式 */
+        .mem-node {
+            position: absolute;
+            width: 125px;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+            transition: all 0.7s cubic-bezier(0.19, 1, 0.22, 1);
+            background-color: rgba(30, 30, 40, 0.85);
+            box-sizing: border-box;
+        }
+
+        .node-title {
+            font-size: 10px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        /* 各级独立色彩配置 */
+        .n-base { border: 2px solid var(--green-base); left: 15px; top: 150px; }
+        .n-ptr1 { border: 2px solid var(--purple-ptr); left: 175px; }
+        .n-ptr2 { border: 2px solid var(--purple-ptr); left: 335px; }
+        .n-target { border: 2px solid var(--blue-dynamic); left: 495px; }
+
+        /* 偏移量标记牌（挂在盒子上方的加法提示） */
+        .offset-tag {
+            position: absolute;
+            top: -18px;
+            right: 2px;
+            background: #d35400;
+            color: white;
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+
+        /* SVG 触手引线系统 */
+        .chain-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .link-line {
+            stroke: var(--accent-yellow);
+            stroke-width: 2.5;
+            fill: none;
+            stroke-dasharray: 5;
+            animation: flowDash 1s linear infinite;
+            transition: d 0.7s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+
+        @keyframes flowDash {
+            to { stroke-dashoffset: -10; }
+        }
+
+        /* 底部CE扫描记录列表 */
+        .ce-list {
+            background-color: #0b0b0e;
+            border: 1px solid #2a2a35;
+            height: 100px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 6px;
+            margin-top: 10px;
+            box-sizing: border-box;
+        }
+        .list-head { display: flex; color: #666; border-bottom: 1px solid #222; padding-bottom: 4px; }
+        .list-row { display: flex; padding: 4px 0; align-items: center; color: #bbb;}
+        .col { flex: 1; padding-left: 5px; }
+
+        /* 洗牌闪烁效果 */
+        .shuffle-flash { animation: flashBlue 0.5s ease-in-out; }
+        @keyframes flashBlue {
+            0%, 100% { background-color: rgba(30, 30, 40, 0.85); }
+            50% { background-color: rgba(52, 152, 219, 0.4); border-color: #fff; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Cheat Engine 动画演示：第 8 关 - 多级指针套娃</h1>
+
+    <div class="step-control">
+        <div class="step-desc" id="stepDescription">正在拉取结构树...</div>
+        <div style="display: flex; gap: 8px;">
+            <button class="btn" id="prevBtn" onclick="changeStep(-1)">上一步</button>
+            <button class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">下一步</button>
+        </div>
+    </div>
+
+    <div class="simulator">
+        
+        <div class="window game-window">
+            <div class="window-title">🎮 游戏客户端 (套娃结构测试程序)</div>
+            <div class="game-screen">
+                <div style="font-size: 15px; font-weight: bold; text-align: center;">通关目标：锁定多级指针，修改血量为 5000</div>
+                <div class="hp-bar-container">
+                    <div class="hp-bar" id="hpBar"></div>
+                    <div class="hp-text" id="hpText">100 / 100</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px; width: 90%;">
+                    <button class="btn" style="background-color: #c0392b;" onclick="damagePlayer()">💥 受到攻击 (-10血)</button>
+                    <button class="btn" id="scrambleBtn" style="background-color: #d35400;" onclick="scrambleMemory()">🔄 重启并打乱全级内存</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="window ce-window">
+            <div class="window-title">🔍 CE 指针链分析面板 (Pointer Chain Visualizer)</div>
+            
+            <div class="memory-chain-zone">
+                <svg class="chain-svg">
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--accent-yellow)"/>
+                        </marker>
+                    </defs>
+                    <path id="line1" class="link-line" marker-end="url(#arrow)" />
+                    <path id="line2" class="link-line" marker-end="url(#arrow)" />
+                    <path id="line3" class="link-line" marker-end="url(#arrow)" />
+                </svg>
+
+                <div class="mem-node n-base">
+                    <div class="node-title" style="color: var(--green-base);">🟢 全局静态基址</div>
+                    <div>地址: 0x0046A0B0</div>
+                    <div id="v-base" style="color: var(--purple-ptr); font-weight: bold; margin-top:4px;">值: 0x01A0</div>
+                </div>
+
+                <div class="mem-node n-ptr1" id="boxPtr1">
+                    <div class="offset-tag">+[0x18]</div>
+                    <div class="node-title" style="color: var(--purple-ptr);">🟣 一级临时指针</div>
+                    <div id="a-ptr1">地址: 0x01A0</div>
+                    <div id="v-ptr1" style="color: var(--purple-ptr); font-weight: bold; margin-top:4px;">值: 0x02B0</div>
+                </div>
+
+                <div class="mem-node n-ptr2" id="boxPtr2">
+                    <div class="offset-tag">+[0x14]</div>
+                    <div class="node-title" style="color: var(--purple-ptr);">🟣 二级临时指针</div>
+                    <div id="a-ptr2">地址: 0x02B0</div>
+                    <div id="v-ptr2" style="color: var(--blue-dynamic); font-weight: bold; margin-top:4px;">值: 0x03C0</div>
+                </div>
+
+                <div class="mem-node n-target" id="boxTarget">
+                    <div class="offset-tag">+[0x0C]</div>
+                    <div class="node-title" style="color: var(--blue-dynamic);">🔵 动态血量地址</div>
+                    <div id="a-target">地址: 0x03C0</div>
+                    <div id="v-target" style="font-weight: bold; margin-top:4px; color: #fff;">值: 100</div>
+                </div>
+            </div>
+
+            <div class="ce-list">
+                <div class="list-head">
+                    <span style="width: 40px; text-align: center;">冻结</span>
+                    <span class="col">描述 (Description)</span>
+                    <span class="col">嵌套地址结构 (Address)</span>
+                    <span class="col" style="max-width: 80px;">当前实时值</span>
+                </div>
+                <div id="ceRowsContainer"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let currentStep = 1;
+        let hpValue = 100;
+        let isChainLocked = false;
+
+        // 随机内存排布洗牌池（模拟动态分配内存）
+        const shufflePool = [
+            { p1Y: 40,  p2Y: 220, tY: 110, p1Addr: "0x0120", p2Addr: "0x04A0", tAddr: "0x05E0" },
+            { p1Y: 240, p2Y: 60,  tY: 180, p1Addr: "0x01A0", p2Addr: "0x02B0", tAddr: "0x03C0" },
+            { p1Y: 130, p2Y: 150, tY: 40,  p1Addr: "0x0230", p2Addr: "0x0610", tAddr: "0x0740" }
+        ];
+        let poolIdx = 1; // 默认初始取第2套
+
+        // 步骤导航状态机
+        const stepConfigs = {
+            1: {
+                desc: "<strong>步骤 1/4 (遭遇多级套娃)：</strong> 游戏内部采用了面向对象设计：<code>基址 -> 玩家对象 -> 背包数据 -> 武器属性 -> 血量</code>。点击游戏的 <strong>【💥 受到攻击】</strong>，观察右侧：只有最后的蓝色血量框在变化，而左边的几级指针里存放的是下一级的跳转目的地址。",
+                render: () => {
+                    document.getElementById("scrambleBtn").disabled = true;
+                    isChainLocked = false;
+                    renderCeTable("none");
+                }
+            },
+            2: {
+                desc: "<strong>步骤 2/4 (内存洗牌灾难)：</strong> 点击游戏的 <strong>【🔄 重启并打乱全级内存】</strong>。由于游戏重启，系统把中间每一级指针的存放位置全部打乱了！你会发现，如果你之前只抓取了最后的蓝色动态地址，现在它已经彻底失效变为了垃圾数据。",
+                render: () => {
+                    document.getElementById("scrambleBtn").disabled = false;
+                    isChainLocked = false;
+                    renderCeTable("failed_single");
+                }
+            },
+            3: {
+                desc: "<strong>步骤 3/4 (构建三级指针链)：</strong> 我们通过‘找出是什么访问了该地址’层层逆向，找齐了三级偏移：<code>0x18, 0x14, 0x0C</code>。在 CE 中手动添加地址，点击 Pointer，填入绿色的基址并逐层点击‘Add Offset’填入偏移。看！CE 底部已经成功顺着链条读取到了正确血量！",
+                render: () => {
+                    document.getElementById("scrambleBtn").disabled = false;
+                    isChainLocked = false;
+                    renderCeTable("pointer_inactive");
+                }
+            },
+            4: {
+                desc: "<strong>步骤 4/4 (完美栓牢全链条)：</strong> 勾选 CE 地址列表最左侧的 <strong>【冻结/Lock】</strong> 复选框。现在，你可以随意去点击左边的【💥 受到攻击】或【🔄 打乱全级内存】。无论这些临时盒子怎么上下乱飘、地址怎么洗牌，CE 的指针链都能顺着黄色箭头一路通关锁死血量！",
+                render: () => {
+                    document.getElementById("scrambleBtn").disabled = false;
+                    isChainLocked = true;
+                    hpValue = 5000;
+                    renderCeTable("pointer_active");
+                }
+            }
+        };
+
+        // 动作：扣血
+        function damagePlayer() {
+            if (isChainLocked) {
+                hpValue = 5000;
+                flashNodes();
+            } else {
+                hpValue = Math.max(0, hpValue - 10);
+            }
+            syncUI();
+        }
+
+        // 动作：打乱全级指针内存 (核心动画触发器)
+        function scrambleMemory() {
+            poolIdx = (poolIdx + 1) % shufflePool.length;
+            hpValue = isChainLocked ? 5000 : 100;
+
+            const cfg = shufflePool[poolIdx];
+            
+            // 驱动各个内存框发生位移
+            document.getElementById("boxPtr1").style.top = cfg.p1Y + "px";
+            document.getElementById("boxPtr2").style.top = cfg.p2Y + "px";
+            document.getElementById("boxTarget").style.top = cfg.tY + "px";
+
+            syncUI();
+            flashNodes();
+        }
+
+        // 数据同步核心
+        function syncUI() {
+            const cfg = shufflePool[poolIdx];
+
+            // 1. 左侧游戏数据
+            const percent = (hpValue / 5000) * 100 < 1 ? (hpValue / 100) * 100 : (hpValue / 5000) * 100;
+            document.getElementById("hpBar").style.width = Math.min(100, percent) + "%";
+            document.getElementById("hpText").innerText = `${hpValue} / ${isChainLocked?5000:100}`;
+
+            // 2. 右侧盒子内部文本刷新
+            document.getElementById("v-base").innerText = "值: " + cfg.p1Addr;
+            
+            document.getElementById("a-ptr1").innerText = "地址: " + cfg.p1Addr;
+            document.getElementById("v-ptr1").innerText = "值: " + cfg.p2Addr;
+
+            document.getElementById("a-ptr2").innerText = "地址: " + cfg.p2Addr;
+            document.getElementById("v-ptr2").innerText = "值: " + cfg.tAddr;
+
+            document.getElementById("a-target").innerText = "地址: " + cfg.tAddr;
+            document.getElementById("v-target").innerText = "值: " + hpValue;
+
+            // 3. 动态重新拉伸 3 根黄色引线
+            drawLinks();
+
+            // 4. 更新CE底部数据行展示
+            const liveVal = document.getElementById("ceLiveVal");
+            if (liveVal) liveVal.innerText = hpValue;
+        }
+
+        // 计算并绘制 3 组跨盒子连线
+        function drawLinks() {
+            const base = document.querySelector(".n-base");
+            const p1 = document.getElementById("boxPtr1");
+            const p2 = document.getElementById("boxPtr2");
+            const tgt = document.getElementById("boxTarget");
+
+            const calcLink = (fromEl, toEl) => {
+                const startX = fromEl.offsetLeft + fromEl.offsetWidth;
+                const startY = fromEl.offsetTop + (fromEl.offsetHeight / 2);
+                const endX = toEl.offsetLeft;
+                const endY = toEl.offsetTop + (toEl.offsetHeight / 2);
+                return `M ${startX} ${startY} Q ${(startX+endX)/2} ${(startY+endY)/2 - 15} ${endX} ${endY}`;
+            };
+
+            document.getElementById("line1").setAttribute("d", calcLink(base, p1));
+            document.getElementById("line2").setAttribute("d", calcLink(p1, p2));
+            document.getElementById("line3").setAttribute("d", calcLink(p2, tgt));
+        }
+
+        // 特效：洗牌时闪烁
+        function flashNodes() {
+            ["boxPtr1", "boxPtr2", "boxTarget"].forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.remove("shuffle-flash");
+                void el.offsetWidth;
+                el.classList.add("shuffle-flash");
+            });
+        }
+
+        // 底部 CE 列表渲染
+        function renderCeTable(type) {
+            const box = document.getElementById("ceRowsContainer");
+            const cfg = shufflePool[poolIdx];
+
+            if (type === "none") {
+                box.innerHTML = `<div style="color:#444; text-align:center; padding-top:25px;">[ 暂未在地址列表保存任何数值 ]</div>`;
+            } else if (type === "failed_single") {
+                box.innerHTML = `
+                    <div class="list-row" style="color: #ff4757;">
+                        <span style="width:40px; text-align:center;"><input type="checkbox" disabled></span>
+                        <span class="col">旧血量动态地址</span>
+                        <span class="col">0x03C0 (上次搜索出的旧地址)</span>
+                        <span class="col" style="max-width: 80px;">?? (错误)</span>
+                    </div>`;
+            } else if (type === "pointer_inactive") {
+                box.innerHTML = `
+                    <div class="list-row" style="color: var(--green-base);">
+                        <span style="width:40px; text-align:center;"><input type="checkbox" onchange="changeStep(1)"></span>
+                        <span class="col">三级玩家血量指针链</span>
+                        <span class="col">[[[0x0046A0B0+18]+14]+0C]</span>
+                        <span class="col" style="max-width: 80px;" id="ceLiveVal">${hpValue}</span>
+                    </div>`;
+            } else if (type === "pointer_active") {
+                box.innerHTML = `
+                    <div class="list-row" style="color: var(--accent-yellow); background: rgba(241,196,15,0.06);">
+                        <span style="width:40px; text-align:center;"><input type="checkbox" checked disabled></span>
+                        <span class="col">三级玩家血量指针链</span>
+                        <span class="col">[[[0x0046A0B0+18]+14]+0C]</span>
+                        <span class="col" style="max-width: 80px;" id="ceLiveVal">5000</span>
+                    </div>`;
+            }
+        }
+
+        // 控制中心
+        function changeStep(dir) {
+            currentStep += dir;
+            if (currentStep < 1) currentStep = 1;
+            if (currentStep > 4) currentStep = 4;
+
+            document.getElementById("prevBtn").disabled = (currentStep === 1);
+            document.getElementById("nextBtn").disabled = (currentStep === 4);
+
+            document.getElementById("stepDescription").innerHTML = stepConfigs[currentStep].desc;
+            stepConfigs[currentStep].render();
+            
+            syncUI();
+        }
+
+        window.onload = () => {
+            changeStep(0);
+            window.addEventListener('resize', drawLinks);
+        };
+    </script>
+</body>
+</html>
